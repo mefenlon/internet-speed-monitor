@@ -1,3 +1,20 @@
+  
+"""
+Name:           internet_speed_monitor.py
+Author:         Matthew Fenlon
+Description:    Monitor Internet connectivity and speed using speedtest-cli
+                and record uploand and download speed (bit/s), downtime time and duration to csv files.
+
+How to run:		To run this program from the Console/Terminal, type:
+					python internet_speed_monitor.py
+
+Date:           2020.11.11
+Version:        1.0
+
+Requires speedtest-cli https://github.com/sivel/speedtest-cli
+Contains modified code from https://github.com/kennethmitra/monitor-internet-connection
+"""
+import asyncio
 import os
 import re
 import subprocess
@@ -13,11 +30,13 @@ import pandas as pd
 
 
 """ Constants """
-polling_freq = 900 #Seconds to check for internet connection
+speed_polling_freq = 900 #Seconds to check for internet speed
+downtime_polling_freq = 1 #Seconds to check for internet connection
 server_id = "20229" #Id of server to test against. Get server id by running speedtest-cli --list
-verbose = True #Set true for verbose output
+verbose = False #Set true for verbose output
 live_data = True #Set true to run live speedtest. Set false to use static string.
-log_file = "monitor_internet.csv" #Use literal path
+speed_test_data_file = "speed_data.csv" #Use literal path
+down_time_data_file = "downtime_data.csv" #Use literal path
 
 def verify_install(verbose=False):
     """ Check if speedtest-cli is installed and accessable.
@@ -40,7 +59,7 @@ def verify_install(verbose=False):
         print("For other install options, visit https://github.com/sivel/speedtest-cli")
         exit(1)
 
-def speedtest_json(server=False, live_data=True, verbose=False):
+async def speedtest_json(server=False, live_data=True, verbose=False):
     """ Returns a json dataset of speed test paremeters. 
         Performs a speedtest using speedtest-cli or
         test data can be returned to save time for testing.
@@ -77,44 +96,6 @@ def speedtest_json(server=False, live_data=True, verbose=False):
             #speedtest-cli command failed, print error message
             print("Error: running speedtest-cli.")
             exit(1)
-
-
-def recursive_items(dictionary, parent_key=''):
-    """ Returns a key value pair from a json object. 
-        If the object is nested, the parent key is prepended.
-    Input Parameters:
-        dictionary: (json object or distionary) Output json string.
-        parent_key: (string) String of the parent key, provided recursively.
-    Returns:
-        List of key and value pairs
-    """
-    for key, value in dictionary.items():
-        if type(value) is dict:
-            yield from recursive_items(value,key)
-        else:
-            if(parent_key!=''):
-                yield (parent_key+"_"+key, value)
-            else:
-                yield (key, value)
-
-def convert_to_dictionary(json_data, verbose=False):
-    """ Returns a list of key value pair from a json object. 
-    Input Parameters:
-        json_data: (json object or distionary) Output json string.
-        parent_key: (string) Strin of the parent key, provided recursively.
-    Returns:
-        List of key and value pairs
-    """
-    dict_data = {}
-    try:
-        for key, value in recursive_items(json_response):
-            dict_data[key] = [value]
-        if verbose:
-            print(dict_data)
-        return dict_data
-    except:
-        print("Error: json key not found.")
-
 
 def is_internet_alive(host="8.8.8.8", port=53, timeout=3):
     """ Source: https://github.com/kennethmitra/monitor-internet-connection
@@ -165,24 +146,24 @@ def signal_handler(signal_received, frame):
 
     # Display exit message to console and record in log file.
     exit_time = datetime.datetime.now()
-    exit_msg = "Monitoring Internet Connection stopped at : " + exit_time.strftime("%Y-%m-%d %H:%M:%S")
+    exit_msg = "\nMonitoring Internet Connection stopped at : " + exit_time.strftime("%Y-%m-%d %H:%M:%S")
     print(exit_msg)
     sys.exit()
 
-def internet_downtime(fail_time):
+async def internet_downtime(fail_time):
     """ Source: https://github.com/kennethmitra/monitor-internet-connection
         Calculates the time internet was down
     Input Params:
         fail_time (datetime object) Time internet connection of downtime detected.
     Returns:
     """
-    msg = "\tInternet Connection unavailable at : " + str(fail_time).split(".")[0]
+    msg = "\tInternet Connection unavailable at : \t" + str(fail_time).split(".")[0]
     print(msg)
 
     # Check every 1 second to see if internet connectivity restored.
     counter = 0
     while not is_internet_alive():
-        time.sleep(1)
+        await asyncio.sleep(1)
         counter += 1
         # For each minute of downtime, log it.
         # The one-minute logs can be useful as a proxy to indicate whether the computer lost power,
@@ -190,67 +171,115 @@ def internet_downtime(fail_time):
         if counter >= 60:
             counter = 0
             now = datetime.datetime.now()
-            msg = "\tInternet Connection still unavailable at : " + str(now).split('.')[0]
-            print(msg)
-                    
+            msg = "\tInternet Connection still unavailable at : \t" + str(now).split('.')[0]
+            print(msg)                    
 
     # Record observed time when internet connectivity restored.
     restore_time = datetime.datetime.now()
-    restore_msg = "\tInternet Connection restored at    : " + str(restore_time).split('.')[0]
+    restore_msg = "\tInternet Connection restored at    : \t" + str(restore_time).split('.')[0]
 
     # Calculate the total duration of the downtime
     downtime_duration = calc_time_diff(fail_time, restore_time)
-    duration_msg = "\tThe duration of the downtime was   :             " + downtime_duration
+    duration_msg = "\tThe duration of the downtime was   : \t" + downtime_duration
 
     # Display restoration message to console and record in log file.
     print(restore_msg)
     print(duration_msg)
 
+    return restore_time,downtime_duration
 
-def write_csv(dataframe, filename):
+
+async def write_csv(dataframe, data_file):
     """ Write a pandas datafreme to a csv file 
     Input Params:
         dataframe (dataframe object) Pandas dataframe to write to file.
-        filename (string) Path and name of file to write or append.
+        data_file (string) Path and name of file to write or append.
     Returns:
         Write success (Boolean) 
     """
     try:
-        if os.path.exists(filename):
+        if os.path.exists(data_file):
             #If file exists, append data
-            print('Appending to log file: ', filename )
-
-            dataframe.to_csv(filename, mode='a', header=False)
+            print('Appending to file: ', data_file )
+            dataframe.to_csv(data_file, mode='a', header=False, index=False)
         else:
             #Create a new file and write header
-            print('Creating new log file: ', filename )
-            dataframe.to_csv(filename, header=True)
+            print('Creating new file: ', data_file )
+            dataframe.to_csv(data_file, header=True, index=False)
     except OSError as error:
         return False
     else:
         return True
 
-#Verify if necessary items are available
-verify_install()
 
-#Capture the Ctrl-C (or SIGINT) signal to permit the program to exit gracefully.
-signal.signal(signal.SIGINT, signal_handler)
+async def speed_test(data_file):
+    """ Run a speed test every period defined by speed_polling_freq
+        Writes data to a csv file
+    Input Params:
+        data_file (string) Path and name of file to write or append.
+    Returns:
+    """
+    #Speedtest loop
+    while True:
+        if is_internet_alive():
+            json_response = await speedtest_json(live_data=live_data, server=server_id, verbose=verbose)
+            df = pd.json_normalize(json_response)
 
-#Speedtest loop
-while True:
-    if is_internet_alive():
-        start_time = datetime.datetime.now()
-        print("Monitoring Internet Connection started at : " + start_time.strftime("%Y-%m-%d %H:%M:%S"))
+            if verbose:
+                print(df)
+            speed_test_write_task = asyncio.create_task(write_csv(df, data_file))
+            
+        await asyncio.sleep(speed_polling_freq)
 
-        json_response = speedtest_json(live_data=live_data, server=server_id, verbose=verbose)
-        d=convert_to_dictionary(json_response, verbose=verbose)
-        df = pd.DataFrame.from_dict(data=d, orient='columns')
-        df['timestamp'] = df['timestamp'].apply(pd.to_datetime)
-        write_csv(df, log_file)
-        time.sleep(polling_freq)
-    else:
-        # Record observed time when internet connectivity fails.
-        fail_time = datetime.datetime.now()
-        internet_downtime(fail_time)
 
-exit(0)
+async def down_time(data_file):
+    """ Run a internet uptime test every second
+        Writes data to a csv file
+    Input Params:
+        data_file (string) Path and name of file to write or append.
+    Returns:
+    """
+    start_time = datetime.datetime.now()
+    print("Monitoring Internet Connection started at : " + start_time.strftime("%Y-%m-%d %H:%M:%S"))
+
+    while True:
+        if not is_internet_alive():
+            # Record observed time when internet connectivity fails.
+            fail_time = datetime.datetime.now()
+            uptime_duration = calc_time_diff(start_time, fail_time)
+
+            restore_time,downtime_duration = await internet_downtime(fail_time)
+            dictionaryData = {
+                'Start_Time' : [start_time],
+                'Fail_Time' : [fail_time],
+                'Restore_time' : [restore_time],
+                'Downtime_Duration' : [downtime_duration],
+                'Uptime_Duration' : [uptime_duration]
+            }
+            start_time = restore_time
+
+            df = pd.DataFrame(dictionaryData)
+            if verbose:
+                print(df)
+            down_time_write_task = asyncio.create_task(write_csv(df, data_file))
+
+        await asyncio.sleep(1)
+
+async def main():
+    """ Monitor internet Uptime and Speed
+    Input Params:
+    Returns:
+    """
+    #Verify if necessary items are available
+    verify_install()
+
+    #Capture the Ctrl-C (or SIGINT) signal to permit the program to exit gracefully.
+    signal.signal(signal.SIGINT, signal_handler)
+
+    await asyncio.gather(
+        down_time(down_time_data_file),
+        speed_test(speed_test_data_file)
+    )
+
+
+asyncio.run(main())
