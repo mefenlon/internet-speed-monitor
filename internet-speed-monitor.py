@@ -84,14 +84,19 @@ async def speedtest_json(server=False, live_data=True, verbose=False):
             #If server id is supplied, use specified server
             if server:
                 test_cmd += " --server "+server
-            json_response = json.loads(
-                subprocess.Popen(shlex.split(test_cmd), stdout=subprocess.PIPE).stdout.read().decode('utf-8')
-            )
             if verbose:
                 print("Command: "+test_cmd)
-                print(json.dumps(json_response, sort_keys=True, indent=4))
+            response = subprocess.Popen(shlex.split(test_cmd), stdout=subprocess.PIPE).stdout.read().decode('utf-8')
 
-            return json_response
+            if is_valid_json(response):
+                json_response = json.loads(response)
+                if verbose:
+                    print(json.dumps(json_response, sort_keys=True, indent=4))
+
+                return json_response
+            else:
+                print("speedtest-cli response was not a valid json format")
+                return None
         except OSError:
             #speedtest-cli command failed, print error message
             print("Error: running speedtest-cli.")
@@ -211,6 +216,20 @@ async def write_csv(dataframe, data_file):
     else:
         return True
 
+def is_valid_json(json_response):
+    """ Validate if a response is a valid json format 
+    Input Params:
+        json_response (string)
+    Returns:
+        String is in json format (Boolean) 
+    """
+    try:
+        json_object = json.loads(json_response)
+        if verbose:
+            print(json.dumps(json_object, sort_keys=True, indent=4))
+    except ValueError as e:
+        return False
+    return True
 
 async def speed_test(data_file):
     """ Run a speed test every period defined by speed_polling_freq
@@ -223,11 +242,12 @@ async def speed_test(data_file):
     while True:
         if is_internet_alive():
             json_response = await speedtest_json(live_data=live_data, server=server_id, verbose=verbose)
-            df = pd.json_normalize(json_response)
+            if json_response is not None:
+                df = pd.json_normalize(json_response)
 
-            if verbose:
-                print(df)
-            speed_test_write_task = asyncio.create_task(write_csv(df, data_file))
+                if verbose:
+                    print(df)
+                speed_test_write_task = asyncio.create_task(write_csv(df, data_file))
             
         await asyncio.sleep(speed_polling_freq)
 
