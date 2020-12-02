@@ -188,7 +188,7 @@ async def internet_downtime(fail_time):
     duration_msg = "\tThe duration of the downtime was   : \t" + downtime_duration
 
     # Display restoration message to console and record in log file.
-    if downtime_duration != "datetime":
+    if downtime_duration != "0:00:00":
         print(restore_msg)
         print(duration_msg)
 
@@ -270,8 +270,7 @@ async def down_time(data_file):
             uptime_duration = calc_time_diff(start_time, fail_time)
 
             restore_time,downtime_duration = await internet_downtime(fail_time)
-            if downtime_duration != "datetime":
-
+            if downtime_duration != "0:00:00":
                 dictionaryData = {
                     'Start_Time' : [start_time],
                     'Fail_Time' : [fail_time],
@@ -286,7 +285,7 @@ async def down_time(data_file):
                     print(df)
                 down_time_write_task = asyncio.create_task(write_csv(df, data_file))
 
-        await asyncio.sleep(downtime_polling_freq)
+        await asyncio.sleep(1)
 
 async def main():
     """ Monitor internet Uptime and Speed
