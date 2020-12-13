@@ -25,8 +25,8 @@ def bits_to_megabytes(bits):
 print("Script full path: ",os.path.abspath(__file__))
 
 #Define constants
-speed_test_data_file = 'speed_data_20201112.csv'
-down_time_data_file = 'downtime_data.csv'
+speed_test_data_file = 'speed_data_current.csv'
+down_time_data_file = 'downtime_data_current.csv'
 
 #Import the data using pandas
 df_speedtest = pd.read_csv(speed_test_data_file,
@@ -197,95 +197,3 @@ for month in months:
 
     plt.show()
     plt.tight_layout()
-
-
-    
-
-'''
-print( df_speedtest['timestamp'].head(),"\n", df_speedtest['datetime_timestamp'].head())
-#x_values = np.linspace(df_speedtest['datetime_timestamp'].min(), df_speedtest['datetime_timestamp'].max(), 300)
-df_speedtest.set_index( df_speedtest['datetime_timestamp'] )
-
-#Unit conversions
-df_speedtest['download_Mbps'] = df_speedtest['download']*0.000001 
-df_speedtest['upload_Mbps'] = df_speedtest['upload']*0.000001 
-df_speedtest['ping_ms'] = df_speedtest['ping']*0.0001 
-
-
-print(df_speedtest.dtypes,"\n", df_speedtest.shape,"\n", df_speedtest.head(), df_speedtest.index)
-
-# df_speedtest.plot(x="datetime_timestamp", y=["download", "upload"])
-# plt.show()
-
-
-#Set up fogur and axis for plots
-
-fig1 = plt.figure(figsize=[9,9])
-# we are plotting a 6row 1 column grid
-ax_speed = plt.subplot2grid((9,1),(0,0), rowspan=3)
-ping_ax = plt.subplot2grid((9,1),(3,0), rowspan=3)
-ax_downtime = plt.subplot2grid((9,1),(6,0), rowspan=3)
-
-
-#Plot 5-year running mean
-ax_speed.plot(
-    df_speedtest.index,
-    df_speedtest['download_Mbps'], 
-    label='Download (Mbps)',
-    alpha=.7, 
-    c='cadetblue'
-    )
-
-#Plot 5-year running mean
-ax_speed.plot(
-    df_speedtest.index,
-    df_speedtest['upload_Mbps'], 
-    label='Upload (Mbps)',
-    alpha=.7, 
-    c='orangered'
-    )
-
-#     #Plot 5-year running mean
-# ax1.plot(
-#     df_speedtest.index,
-#     df_speedtest['ping'], 
-#     label='ping (ms)',
-#     alpha=.7, 
-#     )
-
-#ax1.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
-#ax1.xaxis.set_major_formatter(DateFormatter("%m-%d"))
-
-#ping_ax = ax_speed.twinx()
-#Scatter plot of original temp anomalies
-scatter_plot = ping_ax.scatter(
-    df_speedtest.index,
-    df_speedtest['ping'],     
-    label='Ping',
-    marker='d',
-    alpha=.5, 
-    c=df_speedtest['ping'], 
-    cmap=cm.jet,
-    s=2,
-    )
-#ping_ax.set_yticklabels([])
-
-#Colorbar for colormap of scatter plot
-#cbar = fig1.colorbar(scatter_plot, ax=ping_ax)
-#cbar.set_label('Ping (ms)')
-
-ax_downtime.bar(
-    df_downtime['Fail_Time_datetime'],
-    df_downtime['Downtime_Duration_datetime'], 
-    label='Downtime_Duration',
-    #alpha=.7, 
-    #c='cadetblue'
-    )
-
-#Add plot features
-plt.title('')
-plt.xlabel('Time')
-plt.ylabel('')
-#plt.legend()
-plt.show()
-'''
